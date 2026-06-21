@@ -166,9 +166,9 @@ with st.sidebar:
             """
             <div class="sb-card">
               <div class="sb-card-title">Model Performance</div>
-              <div class="sb-row"><span class="sb-key">Precision</span><span class="sb-val">96.6%</span></div>
-              <div class="sb-row"><span class="sb-key">Recall</span><span class="sb-val">96.6%</span></div>
-              <div class="sb-row"><span class="sb-key">mAP@50</span><span class="sb-val">98.8%</span></div>
+              <div class="sb-row"><span class="sb-key">Precision</span><span class="sb-val">96.3%</span></div>
+              <div class="sb-row"><span class="sb-key">Recall</span><span class="sb-val">97.4%</span></div>
+              <div class="sb-row"><span class="sb-key">mAP@50</span><span class="sb-val">98.6%</span></div>
               <div class="sb-row"><span class="sb-key">mAP@50-95</span><span class="sb-val">58.6%</span></div>
             </div>
             """,
@@ -178,9 +178,9 @@ with st.sidebar:
             """
             <div class="sb-card">
               <div class="sb-card-title">Dataset</div>
-              <div class="sb-row"><span class="sb-key">Train</span><span class="sb-val">877 img</span></div>
-              <div class="sb-row"><span class="sb-key">Valid</span><span class="sb-val">148 img</span></div>
-              <div class="sb-row"><span class="sb-key">Test</span><span class="sb-val">86 img</span></div>
+              <div class="sb-row"><span class="sb-key">Train</span><span class="sb-val">839 img</span></div>
+              <div class="sb-row"><span class="sb-key">Valid</span><span class="sb-val">240 img</span></div>
+              <div class="sb-row"><span class="sb-key">Test</span><span class="sb-val">120 img</span></div>
               <div class="sb-note">PT SAE Saraswanti + Roboflow (TBM kecil)</div>
             </div>
             """,
