@@ -26,3 +26,7 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+
+# Biarkan file di dalam folder demo tetap masuk GitHub
+!demo/*.png
+!demo/*.jpg
