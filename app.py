@@ -165,11 +165,11 @@ with st.sidebar:
         st.markdown(
             """
             <div class="sb-card">
-              <div class="sb-card-title">Model Performance</div>
-              <div class="sb-row"><span class="sb-key">Precision</span><span class="sb-val">96.3%</span></div>
-              <div class="sb-row"><span class="sb-key">Recall</span><span class="sb-val">97.4%</span></div>
-              <div class="sb-row"><span class="sb-key">mAP@50</span><span class="sb-val">98.6%</span></div>
-              <div class="sb-row"><span class="sb-key">mAP@50-95</span><span class="sb-val">58.6%</span></div>
+            <div class="sb-card-title">Model Performance</div>
+            <div class="sb-row"><span class="sb-key">Precision</span><span class="sb-val">96.3%</span></div>
+            <div class="sb-row"><span class="sb-key">Recall</span><span class="sb-val">97.4%</span></div>
+            <div class="sb-row"><span class="sb-key">mAP@50</span><span class="sb-val">98.6%</span></div>
+            <div class="sb-row"><span class="sb-key">mAP@50-95</span><span class="sb-val">58.6%</span></div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -177,11 +177,11 @@ with st.sidebar:
         st.markdown(
             """
             <div class="sb-card">
-              <div class="sb-card-title">Dataset</div>
-              <div class="sb-row"><span class="sb-key">Train</span><span class="sb-val">839 img</span></div>
-              <div class="sb-row"><span class="sb-key">Valid</span><span class="sb-val">240 img</span></div>
-              <div class="sb-row"><span class="sb-key">Test</span><span class="sb-val">120 img</span></div>
-              <div class="sb-note">PT SAE Saraswanti + Roboflow (TBM kecil)</div>
+            <div class="sb-card-title">Dataset</div>
+            <div class="sb-row"><span class="sb-key">Train</span><span class="sb-val">839 img</span></div>
+            <div class="sb-row"><span class="sb-key">Valid</span><span class="sb-val">240 img</span></div>
+            <div class="sb-row"><span class="sb-key">Test</span><span class="sb-val">120 img</span></div>
+            <div class="sb-note">PT SAE Saraswanti + Roboflow (TBM kecil)</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -200,15 +200,15 @@ with st.sidebar:
         st.markdown(
             """
             <div class="sb-card">
-              <div class="sb-card-title">Scope & Limitations</div>
-              <div class="sb-note">
+            <div class="sb-card-title">Scope & Limitations</div>
+            <div class="sb-note">
                 Drone nadir, ketinggian ~100 m<br>
                 Tanpa jalan / objek non-sawit<br>
                 Kondisi mirip data latih
-              </div>
-              <div class="sb-warn">
-                Hasil bersifat decision-support — tetap verifikasi lapangan.
-              </div>
+            </div>
+            <div class="sb-warn">
+                Hasil bersifat decision-support &mdash; tetap verifikasi lapangan.
+            </div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -601,10 +601,10 @@ if uploaded_files:
                             <div class="chip-val">{res['total_trees']:,}</div>
                             <div class="chip-lbl">Final Trees</div>
                         </div>
-                        <!-- Putih: Raw Detections (data mentah, no highlight) -->
+                        <!-- Merah: Duplicates Removed by DBSCAN -->
                         <div class="metric-chip chip-secondary">
-                            <div class="chip-val">{res['raw_detections']:,}</div>
-                            <div class="chip-lbl">Raw Detections</div>
+                            <div class="chip-val">{res.get('merged_count', 0):,}{' (off)' if not res.get('dbscan_applied', True) else ''}</div>
+                            <div class="chip-lbl">Duplicates Removed (DBSCAN)</div>
                         </div>
                         <!-- Kuning: Density (metrik penting) -->
                         <div class="metric-chip chip-accent">
@@ -621,36 +621,99 @@ if uploaded_files:
                     unsafe_allow_html=True,
                 )
 
+                # ── Before/After DBSCAN toggle ─────────────────────────────
+                dbscan_applied = res.get("dbscan_applied", True)
+
+                if dbscan_applied:
+                    view_mode = st.radio(
+                        "Tampilan deteksi",
+                        options=["After DBSCAN (final)", "Before DBSCAN (raw)", "Compare side-by-side"],
+                        index=0,
+                        horizontal=True,
+                        key=f"view_mode_{idx}",
+                        label_visibility="collapsed",
+                    )
+                    if res.get("merged_count", 0) > 0:
+                        st.markdown(
+                            f'<div class="info-strip">DBSCAN merged '
+                            f'<strong>{res["merged_count"]} duplicate detection(s)</strong> '
+                            f'into single trees — see boxes outlined in red on the "Before" view.</div>',
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown(
+                            '<div class="info-strip">DBSCAN ran but found no duplicate detections to merge '
+                            'for this image — raw and final counts are the same.</div>',
+                            unsafe_allow_html=True,
+                        )
+                else:
+                    # DBSCAN was turned off in the sidebar for this run — don't
+                    # pretend there's a before/after to compare, since both
+                    # images are identical (raw detections only).
+                    view_mode = "Before DBSCAN (raw)"
+                    st.markdown(
+                        '<div class="info-strip">⚠️ DBSCAN is <strong>disabled</strong> in sidebar settings — '
+                        'showing raw detections only. Enable DBSCAN to deduplicate overlapping boxes.</div>',
+                        unsafe_allow_html=True,
+                    )
+
                 # ── Image column (full width, clean) ──────────────────────
                 show_potential = st.checkbox(
                     "Tampilkan potential planting spots",
                     key=f"show_potential_{idx}",
                 )
 
+                annotated_before_img = res.get("annotated_before", res["annotated"])
+                annotated_after_img  = res.get("annotated_after", res["annotated"])
+
                 st.markdown('<div class="det-image-wrap">', unsafe_allow_html=True)
-                if show_potential and res.get("rec_coords"):
+
+                if view_mode == "Compare side-by-side":
+                    cmp_col1, cmp_col2 = st.columns(2, gap="medium")
+                    with cmp_col1:
+                        st.image(annotated_before_img, use_container_width=True)
+                        st.markdown(
+                            "<div style='text-align:center;font-size:0.85rem;color:#4e6a52;'>"
+                            f"Before DBSCAN · {res['raw_detections']:,} raw boxes</div>",
+                            unsafe_allow_html=True,
+                        )
+                    with cmp_col2:
+                        st.image(annotated_after_img, use_container_width=True)
+                        st.markdown(
+                            "<div style='text-align:center;font-size:0.85rem;color:#4e6a52;'>"
+                            f"After DBSCAN · {res['total_trees']:,} final trees</div>",
+                            unsafe_allow_html=True,
+                        )
+                elif show_potential and res.get("rec_coords"):
                     # Gunakan fungsi baru dengan bounding box adaptif (TASK 2)
-                    overlay_arr = draw_potential_boxes(res["annotated"], res["rec_coords"], res["boxes"])
+                    base_img = annotated_after_img if view_mode.startswith("After") else annotated_before_img
+                    overlay_arr = draw_potential_boxes(base_img, res["rec_coords"], res["boxes"])
                     st.image(
                         overlay_arr,
                         use_container_width=True,
-                        caption="Detection (hijau) + Potential Spots (kuning dengan outline hitam)",
+                        caption="Detection + Potential Spots (kuning dengan outline hitam)",
                     )
                 else:
+                    base_img = annotated_after_img if view_mode.startswith("After") else annotated_before_img
                     st.image(
-                        res["annotated"],
+                        base_img,
                         use_container_width=True,
                     )
 
+                    caption_text = (
+                        "After DBSCAN — duplicates merged into final trees (red = removed, green = final)"
+                        if view_mode.startswith("After")
+                        else "Before DBSCAN — every raw detection shown, no deduplication"
+                    )
                     st.markdown(
-                        """
+                        f"""
                         <div style="
                             margin-top:0.4rem;
                             font-size:0.85rem;
                             color:#4e6a52;
                             text-align:center;
                         ">
-                            Annotated Detection Result
+                            {caption_text}
                         </div>
                         """,
                         unsafe_allow_html=True
