@@ -8,7 +8,7 @@ def apply_dbscan(
     eps_factor: float,
     img_h: int,
     img_w: int,
-) -> tuple[int, list[list[int]]]:
+) -> tuple[int, list[list[int]], list[int]]:
     """
     Apply DBSCAN clustering on bounding box centroids.
 
@@ -21,9 +21,13 @@ def apply_dbscan(
     Returns:
         total_trees:  Number of unique tree clusters (noise excluded).
         coords:       List of [cx, cy] centroid coordinates per cluster.
+        labels:       List[int], one DBSCAN cluster label per input box
+                      (same order as boxes_all). Boxes sharing the same
+                      label were merged into a single final tree — this is
+                      what lets the UI highlight "before vs after" duplicates.
     """
     if not boxes_all:
-        return 0, []
+        return 0, [], []
 
     boxes_np = np.array(boxes_all, dtype=np.float32)
 
@@ -57,7 +61,7 @@ def apply_dbscan(
     if not unique_labels:
         # Fallback: all detections are noise — return each centroid as-is
         coords = [[int(cx), int(cy)] for (cx, cy) in centroids]
-        return len(coords), coords
+        return len(coords), coords, labels.tolist()
 
     # Compute per-cluster centroid as mean of member points
     coords: list[list[int]] = []
@@ -68,4 +72,4 @@ def apply_dbscan(
         coords.append([int(round(cx)), int(round(cy))])
 
     total_trees = len(coords)
-    return total_trees, coords
+    return total_trees, coords, labels.tolist()
