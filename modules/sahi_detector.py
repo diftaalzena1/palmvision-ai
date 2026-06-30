@@ -247,29 +247,78 @@ def process_image(img_np: np.ndarray, params: dict) -> dict:
         actual_total_slices = 0
         slice_boxes = []  # no slices for YOLO mode
 
-    # ── Draw bounding boxes (tipis, clean) ────────────────────────────────
-    thickness = max(2, int(min(h, w) / 500))  # sedikit lebih tebal
+    # ── Draw bounding boxes — BEFORE DBSCAN (raw, all detections) ─────────
+    # Color gradient KUNING (low conf) -> HIJAU (high conf), unchanged behavior.
+    thickness = max(2, int(min(h, w) / 500))
+    annotated_before = annotated.copy()
     for (x1, y1, x2, y2), conf in zip(boxes_all, confs_all):
-        # Gradien dari KUNING (conf rendah) ke HIJAU TERANG (conf tinggi)
-        # Lebih terang dari sebelumnya
-        r = int(255 * (1 - conf))      # merah: 255 → 0
-        g = int(255 * (0.5 + 0.5 * conf))  # hijau: 128 → 255
+        r = int(255 * (1 - conf))
+        g = int(255 * (0.5 + 0.5 * conf))
         b = 0
         color = (r, g, b)
-        cv2.rectangle(annotated, (x1, y1), (x2, y2), color, thickness)
+        cv2.rectangle(annotated_before, (x1, y1), (x2, y2), color, thickness)
 
     # ── DBSCAN Clustering ─────────────────────────────────────────────────
-    if len(boxes_all) > 0 and params.get("use_dbscan", True):
+    dbscan_labels: list[int] = []
+    dbscan_applied = bool(len(boxes_all) > 0 and params.get("use_dbscan", True))
+    if dbscan_applied:
         from modules.dbscan_cluster import apply_dbscan
-        total_trees, coords = apply_dbscan(boxes_all, params.get("eps_factor", 0.6), h, w)
-
-        # radius = max(3, int(min(h, w) / 250))
-        # RED_RGB = (255, 0, 0)  # MERAH dalam format RGB
-        # for (cx, cy) in coords:
-        #     cv2.circle(annotated, (cx, cy), radius, RED_RGB, -1)
+        total_trees, coords, dbscan_labels = apply_dbscan(
+            boxes_all, params.get("eps_factor", 0.6), h, w
+        )
     else:
         total_trees = len(boxes_all)
         coords = [[int((x1 + x2) / 2), int((y1 + y2) / 2)] for (x1, y1, x2, y2) in boxes_all]
+        dbscan_labels = list(range(len(boxes_all)))  # each box is its own "cluster"
+
+    merged_count = max(0, len(boxes_all) - total_trees)
+
+    # ── Draw bounding boxes — AFTER DBSCAN (deduplicated result) ───────────
+    # - Duplicate raw boxes that DBSCAN merged into ONE final tree are drawn
+    #   thin/red (CENTROID_CLUSTER) so the user can see exactly what got
+    #   collapsed.
+    # - The single resulting tree per cluster is drawn as a solid green
+    #   (FINAL_TREE) box, centered on the cluster centroid, sized to match
+    #   the average member box.
+    from config import CENTROID_CLUSTER, FINAL_TREE
+
+    annotated_after = annotated.copy()
+    if dbscan_labels:
+        labels_arr = np.array(dbscan_labels)
+        boxes_arr = np.array(boxes_all)
+
+        # Map each cluster label -> list of member box indices
+        unique_lbls = sorted(set(dbscan_labels))
+        label_to_indices = {lbl: np.where(labels_arr == lbl)[0] for lbl in unique_lbls}
+
+        coord_i = 0  # walks coords in the same order apply_dbscan produced them
+        for lbl in [l for l in unique_lbls if l != -1] or unique_lbls:
+            member_idx = label_to_indices.get(lbl, [])
+            if len(member_idx) == 0:
+                continue
+            members = boxes_arr[member_idx]
+
+            if len(member_idx) > 1:
+                # Duplicates merged by DBSCAN — show the raw boxes thin/red
+                for (x1, y1, x2, y2) in members:
+                    cv2.rectangle(
+                        annotated_after, (int(x1), int(y1)), (int(x2), int(y2)),
+                        CENTROID_CLUSTER, max(1, thickness - 1),
+                    )
+
+            # Final deduplicated tree box: centered on centroid, sized to
+            # the average of its merged member boxes.
+            avg_w = float((members[:, 2] - members[:, 0]).mean())
+            avg_h = float((members[:, 3] - members[:, 1]).mean())
+            cx = float(((members[:, 0] + members[:, 2]) / 2).mean())
+            cy = float(((members[:, 1] + members[:, 3]) / 2).mean())
+            fx1, fy1 = int(cx - avg_w / 2), int(cy - avg_h / 2)
+            fx2, fy2 = int(cx + avg_w / 2), int(cy + avg_h / 2)
+            cv2.rectangle(annotated_after, (fx1, fy1), (fx2, fy2), FINAL_TREE, thickness)
+
+    # `annotated` kept for backward-compat: defaults to the AFTER view since
+    # that is the model's final, trusted output.
+    annotated = annotated_after
 
     # ── Recommendation (empty spots) ─────────────────────────────────────
     rec_coords: list[list[int]] = []
@@ -280,7 +329,11 @@ def process_image(img_np: np.ndarray, params: dict) -> dict:
     avg_conf = float(np.mean(confs_all)) if confs_all else 0.0
 
     return {
-        "annotated":      annotated,
+        "annotated":         annotated,          # = annotated_after (back-compat)
+        "annotated_before":  annotated_before,    # raw detections, pre-DBSCAN
+        "annotated_after":   annotated_after,     # deduplicated, post-DBSCAN
+        "merged_count":      merged_count,        # duplicate boxes collapsed by DBSCAN
+        "dbscan_applied":    dbscan_applied,       # False = DBSCAN was off for this run
         "boxes":          boxes_all,
         "coords":         coords,
         "rec_coords":     rec_coords,
